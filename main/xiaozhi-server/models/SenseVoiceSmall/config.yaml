@@ -1,97 +1,179 @@
+# 编码器配置，使用 SenseVoiceEncoderSmall 编码器
 encoder: SenseVoiceEncoderSmall
+# 编码器的具体配置参数
 encoder_conf:
+    # 编码器输出的特征维度大小
     output_size: 512
+    # 多头注意力机制中的注意力头数量
     attention_heads: 4
+    # 线性层的单元数量
     linear_units: 2048
+    # 编码器中块的数量
     num_blocks: 50
+    # 某种特殊块（tp_blocks）的数量
     tp_blocks: 20
+    # 丢弃率，用于防止过拟合
     dropout_rate: 0.1
+    # 位置编码的丢弃率
     positional_dropout_rate: 0.1
+    # 注意力机制中的丢弃率
     attention_dropout_rate: 0.1
+    # 输入层的类型
     input_layer: pe
+    # 位置编码的类，使用正弦位置编码器
     pos_enc_class: SinusoidalPositionEncoder
+    # 是否在归一化之前进行操作
     normalize_before: true
+    # 卷积核的大小
     kernel_size: 11
+    # sanm 模块的偏移量
     sanm_shfit: 0
+    # 自注意力层的类型
     selfattention_layer_type: sanm
 
-
+# 模型配置，使用 SenseVoiceSmall 模型
 model: SenseVoiceSmall
+# 模型的具体配置参数
 model_conf:
+    # 是否使用长度归一化的损失函数
     length_normalized_loss: true
+    # 句子起始符号的索引
     sos: 1
+    # 句子结束符号的索引
     eos: 2
+    # 忽略的标签索引，用于处理填充等情况
     ignore_id: -1
 
+# 分词器配置，使用 SentencepiecesTokenizer 分词器
 tokenizer: SentencepiecesTokenizer
+# 分词器的具体配置参数
 tokenizer_conf:
+  # BPE 模型的路径，这里为空
   bpemodel: null
+  # 未知符号的表示
   unk_symbol: <unk>
+  # 是否按空格进行分词
   split_with_space: true
 
+# 前端处理配置，使用 WavFrontend 前端处理
 frontend: WavFrontend
+# 前端处理的具体配置参数
 frontend_conf:
+    # 音频的采样率
     fs: 16000
+    # 加窗函数的类型，使用汉明窗
     window: hamming
+    # 梅尔滤波器组的数量
     n_mels: 80
+    # 帧长，单位为毫秒
     frame_length: 25
+    # 帧移，单位为毫秒
     frame_shift: 10
+    # LFR（Low Frame Rate）的 m 参数
     lfr_m: 7
+    # LFR 的 n 参数
     lfr_n: 6
+    # 均值方差归一化文件的路径，这里为空
     cmvn_file: null
 
-
+# 数据集配置，使用 SenseVoiceCTCDataset 数据集
 dataset: SenseVoiceCTCDataset
+# 数据集的具体配置参数
 dataset_conf:
+  # 索引数据集的类型
   index_ds: IndexDSJsonl
+  # 批量采样器的类型
   batch_sampler: EspnetStyleBatchSampler
+  # 数据分割的数量
   data_split_num: 32
+  # 批量类型，这里按 token 数量
   batch_type: token
+  # 每个批次的 token 数量
   batch_size: 14000
+  # 最大的 token 长度
   max_token_length: 2000
+  # 最小的 token 长度
   min_token_length: 60
+  # 最大的源序列长度
   max_source_length: 2000
+  # 最小的源序列长度
   min_source_length: 60
+  # 最大的目标序列长度
   max_target_length: 200
+  # 最小的目标序列长度
   min_target_length: 0
+  # 是否对数据进行打乱
   shuffle: true
+  # 数据加载的工作进程数量
   num_workers: 4
+  # 句子起始符号的索引，引用 model_conf 中的 sos
   sos: ${model_conf.sos}
+  # 句子结束符号的索引，引用 model_conf 中的 eos
   eos: ${model_conf.eos}
+  # 索引数据集的类型（重复定义）
   IndexDSJsonl: IndexDSJsonl
+  # 重试次数
   retry: 20
 
+# 训练配置
 train_conf:
+  # 梯度累积的步数
   accum_grad: 1
+  # 梯度裁剪的阈值
   grad_clip: 5
+  # 最大的训练轮数
   max_epoch: 20
+  # 保留的最优模型数量
   keep_nbest_models: 10
+  # 平均的最优模型数量
   avg_nbest_model: 10
+  # 日志记录的间隔步数
   log_interval: 100
+  # 是否从上次中断的地方继续训练
   resume: true
+  # 验证的间隔步数
   validate_interval: 10000
+  # 保存检查点的间隔步数
   save_checkpoint_interval: 10000
 
+# 优化器配置，使用 adamw 优化器
 optim: adamw
+# 优化器的具体配置参数
 optim_conf:
+  # 学习率
   lr: 0.00002
+# 学习率调度器配置，使用 warmuplr 调度器
 scheduler: warmuplr
+# 学习率调度器的具体配置参数
 scheduler_conf:
+  # 热身步骤的数量
   warmup_steps: 25000
 
+# 频谱增强配置，使用 SpecAugLFR 频谱增强方法
 specaug: SpecAugLFR
+# 频谱增强的具体配置参数
 specaug_conf:
+    # 是否应用时间扭曲
     apply_time_warp: false
+    # 时间扭曲的窗口大小
     time_warp_window: 5
+    # 时间扭曲的模式
     time_warp_mode: bicubic
+    # 是否应用频率掩码
     apply_freq_mask: true
+    # 频率掩码的宽度范围
     freq_mask_width_range:
     - 0
     - 30
+    # LFR 的比率
     lfr_rate: 6
+    # 频率掩码的数量
     num_freq_mask: 1
+    # 是否应用时间掩码
     apply_time_mask: true
+    # 时间掩码的宽度范围
     time_mask_width_range:
     - 0
     - 12
+    # 时间掩码的数量
     num_time_mask: 1

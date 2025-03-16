@@ -1,128 +1,30 @@
 from config.logger import setup_logging
 import json
 from core.handle.sendAudioHandle import send_stt_message
-from core.utils.dialogue import Message
 from core.utils.util import remove_punctuation_and_length
-from config.functionCallConfig import FunctionCallConfig
-import asyncio
-from enum import Enum
-
-TAG = __name__
-logger = setup_logging()
 
 
-class Action(Enum):
-    NOTFOUND = (0, "没有找到函数")
-    NONE = (1, "啥也不干")
-    RESPONSE = (2, "直接回复")
-    REQLLM = (3, "调用函数后再请求llm生成回复")
+TAG = __name__  # 定义日志标签，用于在日志中标识模块名称
+logger = setup_logging()  # 初始化日志记录器，用于记录程序运行过程中的日志信息
 
-    def __init__(self, code, message):
-        self.code = code
-        self.message = message
-
-
-class ActionResponse:
-    def __init__(self, action: Action, result, response):
-        self.action = action  # 动作类型
-        self.result = result  # 动作产生的结果
-        self.response = response  # 直接回复的内容
-
-
-def get_functions():
-    """获取功能调用配置"""
-    return FunctionCallConfig
-
-
-def handle_llm_function_call(conn, function_call_data):
-    try:
-        function_name = function_call_data["name"]
-
-        if function_name == "handle_exit_intent":
-            # 处理退出意图
-            try:
-                say_goodbye = json.loads(function_call_data["arguments"]).get("say_goodbye", "再见")
-                conn.close_after_chat = True
-                logger.bind(tag=TAG).info(f"退出意图已处理:{say_goodbye}")
-                return ActionResponse(action=Action.RESPONSE, result="退出意图已处理", response=say_goodbye)
-            except Exception as e:
-                logger.bind(tag=TAG).error(f"处理退出意图错误: {e}")
-
-        elif function_name == "play_music":
-            # 处理音乐播放意图
-            try:
-                song_name = "random"
-                arguments = function_call_data["arguments"]
-                if arguments is not None and len(arguments) > 0:
-                    args = json.loads(arguments)
-                    song_name = args.get("song_name", "random")
-                music_intent = f"播放音乐 {song_name}" if song_name != "random" else "随机播放音乐"
-
-                # 执行音乐播放命令
-                future = asyncio.run_coroutine_threadsafe(
-                    conn.music_handler.handle_music_command(conn, music_intent),
-                    conn.loop
-                )
-                future.result()
-                return ActionResponse(action=Action.RESPONSE, result="退出意图已处理", response="还想听什么歌？")
-            except Exception as e:
-                logger.bind(tag=TAG).error(f"处理音乐意图错误: {e}")
-        elif function_name == "hass_play_music":
-             #hass播放音乐
-            try:
-                 arguments = json.loads(function_call_data["arguments"])
-                 entity_id = arguments["entity_id"]
-                 media_content_id = arguments["media_content_id"]
- 
-                 future = asyncio.run_coroutine_threadsafe(
-                     conn.hass_handler.hass_play_music(conn, entity_id, media_content_id),
-                     conn.loop
-                 )
-                 future.result()
-                 return ActionResponse(action=Action.RESPONSE, result="音乐已播放", response=f"正在为你播放{media_content_id}")
-            except Exception as e:
-                 logger.bind(tag=TAG).error(f"处理音乐意图错误: {e}")
- 
-        elif function_name == "hass_toggle_device":
-             #hass控制设备
-             try:
-                 arguments = json.loads(function_call_data["arguments"])
-                 state = arguments["state"]
-                 entity_id = arguments["entity_id"]
- 
-                 future = asyncio.run_coroutine_threadsafe(
-                     conn.hass_handler.hass_toggle_device(conn, entity_id, state),
-                     conn.loop
-                 )
-                 ha_response = future.result()
-                 return ActionResponse(action=Action.RESPONSE, result="执行成功", response=ha_response)
-             except Exception as e:
-                 logger.bind(tag=TAG).error(f"处理控制设备意图错误: {e}")
-        else:
-            return ActionResponse(action=Action.NOTFOUND, result="没有找到对应的函数", response="没有找到对应的函数处理相对于的功能呢，你可以需要添加预设的对应函数处理呢")
-    except Exception as e:
-        logger.bind(tag=TAG).error(f"处理function call错误: {e}")
-
-    return None
-
-
+# 处理用户意图
 async def handle_user_intent(conn, text):
     """
-    Handle user intent before starting chat
+    在开始聊天之前处理用户意图。
     
-    Args:
-        conn: Connection object
-        text: User's text input
+    参数:
+        conn: 客户端连接对象
+        text: 用户的文本输入
     
-    Returns:
-        bool: True if intent was handled, False if should proceed to chat
+    返回:
+        bool: 如果意图已处理返回True，否则返回False，继续常规聊天流程。
     """
     # 检查是否有明确的退出命令
     if await check_direct_exit(conn, text):
         return True
 
     if conn.use_function_call_mode:
-        # 使用支持function calling的聊天方法,不再进行意图分析
+        # 如果启用了function calling模式，直接返回False，跳过意图分析
         return False
 
     # 使用LLM进行意图分析
@@ -131,31 +33,34 @@ async def handle_user_intent(conn, text):
     if not intent:
         return False
 
-    # 处理各种意图
+    # 处理意图识别结果
     return await process_intent_result(conn, intent, text)
 
 
+# 检查是否有明确的退出命令
 async def check_direct_exit(conn, text):
     """检查是否有明确的退出命令"""
-    _, text = remove_punctuation_and_length(text)
-    cmd_exit = conn.cmd_exit
+    _, text = remove_punctuation_and_length(text)  # 去除标点符号并限制文本长度
+    cmd_exit = conn.cmd_exit  # 获取退出命令列表
     for cmd in cmd_exit:
         if text == cmd:
             logger.bind(tag=TAG).info(f"识别到明确的退出命令: {text}")
-            await conn.close()
+            await conn.close()  # 关闭连接
             return True
     return False
 
 
+# 使用LLM分析用户意图
 async def analyze_intent_with_llm(conn, text):
     """使用LLM分析用户意图"""
     if not hasattr(conn, 'intent') or not conn.intent:
         logger.bind(tag=TAG).warning("意图识别服务未初始化")
         return None
 
-    # 对话历史记录
+    # 获取对话历史记录
     dialogue = conn.dialogue
     try:
+        # 调用LLM意图检测接口
         intent_result = await conn.intent.detect_intent(conn, dialogue.dialogue, text)
 
         # 尝试解析JSON结果
@@ -173,23 +78,22 @@ async def analyze_intent_with_llm(conn, text):
     return None
 
 
+# 处理意图识别结果
 async def process_intent_result(conn, intent, original_text):
     """处理意图识别结果"""
     # 处理退出意图
     if "结束聊天" in intent:
         logger.bind(tag=TAG).info(f"识别到退出意图: {intent}")
 
-        # 如果正在播放音乐，可以关了 TODO
-
-        # 如果是明确的离别意图，发送告别语并关闭连接
-        await send_stt_message(conn, original_text)
-        conn.executor.submit(conn.chat_and_close, original_text)
+        # 如果正在播放音乐，可以关了（TODO）
+        await send_stt_message(conn, original_text)  # 发送语音消息
+        conn.executor.submit(conn.chat_and_close, original_text)  # 提交关闭聊天任务
         return True
 
     # 处理播放音乐意图
     if "播放音乐" in intent:
         logger.bind(tag=TAG).info(f"识别到音乐播放意图: {intent}")
-        await conn.music_handler.handle_music_command(conn, intent)
+        await conn.music_handler.handle_music_command(conn, intent)  # 处理音乐播放命令
         return True
 
     # 其他意图处理可以在这里扩展

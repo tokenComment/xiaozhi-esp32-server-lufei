@@ -77,7 +77,10 @@ public interface Constant {
      * token header
      */
     String TOKEN_HEADER = "token";
-
+    /*
+     * 验证
+     */
+    String AUTHORIZATION = "Authorization";
     /**
      * 路径分割符
      */
